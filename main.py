@@ -1,32 +1,23 @@
 from fastapi import FastAPI, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from pathlib import Path
 from datetime import datetime
-import shutil
 import uuid
 import os
 
 from supabase import create_client, Client
 
 
-# ============================================================
-# CONFIGURAÇÃO
-# ============================================================
-
 app = FastAPI(title="Melhoria Contínua")
 
 BASE_DIR = Path(__file__).resolve().parent
 
-UPLOAD_DIR = BASE_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
 
-
-# ============================================================
+# =========================================================
 # SUPABASE
-# ============================================================
+# =========================================================
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -41,40 +32,26 @@ supabase: Client = create_client(
     SUPABASE_KEY
 )
 
+BUCKET_FOTOS = "pendencias"
 
-# ============================================================
-# SESSÃO
-# ============================================================
+
+# =========================================================
+# CONFIGURAÇÕES DO FASTAPI
+# =========================================================
 
 app.add_middleware(
     SessionMiddleware,
     secret_key="melhoria-contínua-chave-secreta"
 )
 
-
-# ============================================================
-# UPLOADS
-# ============================================================
-
-app.mount(
-    "/uploads",
-    StaticFiles(directory=str(UPLOAD_DIR)),
-    name="uploads"
-)
-
-
-# ============================================================
-# TEMPLATES
-# ============================================================
-
 templates = Jinja2Templates(
     directory=str(BASE_DIR / "templates")
 )
 
 
-# ============================================================
+# =========================================================
 # SETORES
-# ============================================================
+# =========================================================
 
 SETORES = [
     "A01",
@@ -89,11 +66,12 @@ SETORES = [
 ]
 
 
-# ============================================================
+# =========================================================
 # USUÁRIOS
-# ============================================================
+# =========================================================
 
 USUARIOS = {
+
     "marlon": {
         "senha": "1234",
         "nome": "Marlon",
@@ -166,11 +144,12 @@ USUARIOS = {
 }
 
 
-# ============================================================
-# FUNÇÕES AUXILIARES
-# ============================================================
+# =========================================================
+# USUÁRIO LOGADO
+# =========================================================
 
 def usuario_logado(request: Request):
+
     username = request.session.get("usuario")
 
     if not username:
@@ -179,11 +158,11 @@ def usuario_logado(request: Request):
     return USUARIOS.get(username)
 
 
-def salvar_foto(arquivo: UploadFile):
-    """
-    Por enquanto mantém o sistema de fotos exatamente como estava.
-    A próxima etapa será mandar essas fotos para o Storage do Supabase.
-    """
+# =========================================================
+# SALVAR FOTO NO SUPABASE STORAGE
+# =========================================================
+
+async def salvar_foto(arquivo: UploadFile):
 
     if not arquivo or not arquivo.filename:
         return None
@@ -192,24 +171,83 @@ def salvar_foto(arquivo: UploadFile):
 
     nome_arquivo = f"{uuid.uuid4().hex}{extensao}"
 
-    caminho = UPLOAD_DIR / nome_arquivo
+    conteudo = await arquivo.read()
 
-    with caminho.open("wb") as buffer:
-        shutil.copyfileobj(
-            arquivo.file,
-            buffer
-        )
+    content_type = arquivo.content_type or "application/octet-stream"
+
+    try:
+
+        supabase.storage \
+            .from_(BUCKET_FOTOS) \
+            .upload(
+                nome_arquivo,
+                conteudo,
+                {
+                    "content-type": content_type,
+                    "upsert": "false"
+                }
+            )
+
+    except Exception as erro:
+
+        print("ERRO AO ENVIAR FOTO PARA O SUPABASE:")
+        print(erro)
+
+        return None
 
     return nome_arquivo
 
 
-def formatar_pendencia(p):
-    """
-    Converte o registro do Supabase para o formato que
-    os templates atuais já utilizam.
+# =========================================================
+# ROTA PARA EXIBIR AS FOTOS
+# =========================================================
+#
+# O HTML continua usando:
+#
+# /uploads/nome-da-foto.jpg
+#
+# Mas agora essa rota redireciona para o Supabase Storage.
+# =========================================================
 
-    Não precisamos alterar o modelo visual.
-    """
+@app.get("/uploads/{arquivo:path}")
+async def visualizar_foto(arquivo: str):
+
+    if not arquivo:
+        return HTMLResponse(
+            "Arquivo não informado.",
+            status_code=400
+        )
+
+    try:
+
+        url = (
+            supabase
+            .storage
+            .from_(BUCKET_FOTOS)
+            .get_public_url(arquivo)
+        )
+
+        return RedirectResponse(
+            url,
+            status_code=302
+        )
+
+    except Exception as erro:
+
+        print("ERRO AO GERAR URL DA FOTO:")
+        print(erro)
+
+        return HTMLResponse(
+            "Foto não encontrada.",
+            status_code=404
+        )
+
+
+# =========================================================
+# FORMATAR PENDÊNCIA
+# =========================================================
+
+def formatar_pendencia(p):
 
     if not p:
         return None
@@ -217,14 +255,19 @@ def formatar_pendencia(p):
     db_id = p.get("id")
 
     try:
+
         codigo = f"MC-{int(db_id):05d}"
+
     except:
+
         codigo = str(db_id)
 
     data_criacao = p.get("data_criacao")
 
     if data_criacao:
+
         try:
+
             dt = datetime.fromisoformat(
                 data_criacao.replace("Z", "+00:00")
             )
@@ -234,22 +277,29 @@ def formatar_pendencia(p):
             )
 
         except:
+
             data_criacao_formatada = str(data_criacao)
 
     else:
+
         data_criacao_formatada = None
 
     return {
+
         "id": codigo,
 
-        # ID real do banco
         "db_id": db_id,
 
         "setor": p.get("setor"),
+
         "local": p.get("local"),
+
         "descricao": p.get("descricao"),
+
         "categoria": p.get("categoria"),
+
         "prioridade": p.get("prioridade"),
+
         "prazo": p.get("prazo"),
 
         "foto_antes": p.get("foto_antes"),
@@ -272,7 +322,12 @@ def formatar_pendencia(p):
     }
 
 
+# =========================================================
+# BUSCAR TODAS AS PENDÊNCIAS
+# =========================================================
+
 def buscar_todas_pendencias():
+
     resposta = (
         supabase
         .table("pendencias")
@@ -289,17 +344,26 @@ def buscar_todas_pendencias():
     ]
 
 
+# =========================================================
+# BUSCAR UMA PENDÊNCIA
+# =========================================================
+
 def buscar_pendencia(codigo):
-    """
-    Recebe algo como MC-00001 e procura o ID 1 no banco.
-    """
 
     try:
+
         if codigo.startswith("MC-"):
-            db_id = int(codigo.replace("MC-", ""))
+
+            db_id = int(
+                codigo.replace("MC-", "")
+            )
+
         else:
+
             db_id = int(codigo)
+
     except:
+
         return None
 
     resposta = (
@@ -319,16 +383,20 @@ def buscar_pendencia(codigo):
     )
 
 
-# ============================================================
+# =========================================================
 # LOGIN
-# ============================================================
+# =========================================================
 
-@app.get("/", response_class=HTMLResponse)
+@app.get(
+    "/",
+    response_class=HTMLResponse
+)
 async def inicio(request: Request):
 
     usuario = usuario_logado(request)
 
     if usuario:
+
         return RedirectResponse(
             "/dashboard",
             status_code=303
@@ -340,6 +408,10 @@ async def inicio(request: Request):
         context={}
     )
 
+
+# =========================================================
+# PROCESSAR LOGIN
+# =========================================================
 
 @app.post("/login")
 async def login(
@@ -369,9 +441,9 @@ async def login(
     )
 
 
-# ============================================================
+# =========================================================
 # LOGOUT
-# ============================================================
+# =========================================================
 
 @app.get("/logout")
 async def logout(request: Request):
@@ -384,25 +456,29 @@ async def logout(request: Request):
     )
 
 
-# ============================================================
+# =========================================================
 # DASHBOARD
-# ============================================================
+# =========================================================
 
-@app.get("/dashboard", response_class=HTMLResponse)
+@app.get(
+    "/dashboard",
+    response_class=HTMLResponse
+)
 async def dashboard(request: Request):
 
     usuario = usuario_logado(request)
 
     if not usuario:
+
         return RedirectResponse(
             "/",
             status_code=303
         )
 
-    # Busca no Supabase
     lista = buscar_todas_pendencias()
 
     # Líder só enxerga seu setor
+
     if usuario["perfil"] == "lider":
 
         lista = [
@@ -433,19 +509,25 @@ async def dashboard(request: Request):
         request=request,
         name="dashboard.html",
         context={
+
             "usuario": usuario,
+
             "pendencias": lista,
+
             "setores": SETORES,
+
             "pendentes": pendentes,
+
             "aguardando": aguardando,
+
             "validadas": validadas
         }
     )
 
 
-# ============================================================
-# NOVA PENDÊNCIA - FORMULÁRIO
-# ============================================================
+# =========================================================
+# FORMULÁRIO NOVA PENDÊNCIA
+# =========================================================
 
 @app.get(
     "/pendencia/nova",
@@ -457,7 +539,10 @@ async def nova_pendencia_form(
 
     usuario = usuario_logado(request)
 
-    if not usuario or usuario["perfil"] != "admin":
+    if (
+        not usuario
+        or usuario["perfil"] != "admin"
+    ):
 
         return RedirectResponse(
             "/dashboard",
@@ -473,19 +558,25 @@ async def nova_pendencia_form(
     )
 
 
-# ============================================================
+# =========================================================
 # CRIAR PENDÊNCIA
-# ============================================================
+# =========================================================
 
 @app.post("/pendencia/nova")
 async def criar_pendencia(
+
     request: Request,
 
     setor: str = Form(...),
+
     local: str = Form(...),
+
     descricao: str = Form(...),
+
     categoria: str = Form(...),
+
     prioridade: str = Form(...),
+
     prazo: str = Form(...),
 
     foto: UploadFile = File(None)
@@ -493,29 +584,41 @@ async def criar_pendencia(
 
     usuario = usuario_logado(request)
 
-    if not usuario or usuario["perfil"] != "admin":
+    if (
+        not usuario
+        or usuario["perfil"] != "admin"
+    ):
 
         return RedirectResponse(
             "/dashboard",
             status_code=303
         )
 
-    # Salva foto localmente por enquanto
-    foto_nome = salvar_foto(foto)
+    # Salva foto no Supabase Storage
+
+    foto_nome = await salvar_foto(foto)
 
     nova = {
+
         "setor": setor,
+
         "local": local,
+
         "descricao": descricao,
+
         "categoria": categoria,
+
         "prioridade": prioridade,
+
         "prazo": prazo,
+
         "foto_antes": foto_nome,
+
         "status": "PENDENTE",
+
         "criado_por": usuario["nome"]
     }
 
-    # GRAVA NO SUPABASE
     supabase \
         .table("pendencias") \
         .insert(nova) \
@@ -527,16 +630,18 @@ async def criar_pendencia(
     )
 
 
-# ============================================================
+# =========================================================
 # VISUALIZAR PENDÊNCIA
-# ============================================================
+# =========================================================
 
 @app.get(
     "/pendencia/{pendencia_id}",
     response_class=HTMLResponse
 )
 async def visualizar_pendencia(
+
     request: Request,
+
     pendencia_id: str
 ):
 
@@ -560,11 +665,14 @@ async def visualizar_pendencia(
             status_code=404
         )
 
-    # Segurança:
-    # líder só pode acessar seu setor
+    # Líder só pode acessar seu setor
+
     if usuario["perfil"] == "lider":
 
-        if pendencia["setor"] != usuario["setor"]:
+        if (
+            pendencia["setor"]
+            != usuario["setor"]
+        ):
 
             return HTMLResponse(
                 "Acesso não permitido.",
@@ -575,25 +683,29 @@ async def visualizar_pendencia(
         request=request,
         name="pendencia.html",
         context={
+
             "usuario": usuario,
+
             "pendencia": pendencia
         }
     )
 
 
-# ============================================================
+# =========================================================
 # RESOLVER PENDÊNCIA
-# ============================================================
+# =========================================================
 
 @app.post(
     "/pendencia/{pendencia_id}/resolver"
 )
 async def resolver_pendencia(
+
     request: Request,
 
     pendencia_id: str,
 
     data_resolucao: str = Form(...),
+
     observacao: str = Form(...),
 
     foto: UploadFile = File(None)
@@ -601,7 +713,10 @@ async def resolver_pendencia(
 
     usuario = usuario_logado(request)
 
-    if not usuario or usuario["perfil"] != "lider":
+    if (
+        not usuario
+        or usuario["perfil"] != "lider"
+    ):
 
         return RedirectResponse(
             "/dashboard",
@@ -619,35 +734,52 @@ async def resolver_pendencia(
             status_code=404
         )
 
-    # Confere setor
-    if pendencia["setor"] != usuario["setor"]:
+    if (
+        pendencia["setor"]
+        != usuario["setor"]
+    ):
 
         return HTMLResponse(
             "Acesso não permitido.",
             status_code=403
         )
 
-    foto_nome = salvar_foto(foto)
+    # Salva foto da resolução
+    # no Supabase Storage
+
+    foto_nome = await salvar_foto(foto)
 
     try:
+
         db_id = int(
             pendencia["db_id"]
         )
+
     except:
+
         return HTMLResponse(
             "ID da pendência inválido.",
             status_code=400
         )
 
     atualizacao = {
-        "data_resolucao": data_resolucao,
-        "observacao_resolucao": observacao,
-        "foto_depois": foto_nome,
-        "status": "AGUARDANDO VALIDAÇÃO",
-        "resolvido_por": usuario["nome"]
+
+        "data_resolucao":
+            data_resolucao,
+
+        "observacao_resolucao":
+            observacao,
+
+        "foto_depois":
+            foto_nome,
+
+        "status":
+            "AGUARDANDO VALIDAÇÃO",
+
+        "resolvido_por":
+            usuario["nome"]
     }
 
-    # ATUALIZA NO SUPABASE
     supabase \
         .table("pendencias") \
         .update(atualizacao) \
@@ -660,21 +792,26 @@ async def resolver_pendencia(
     )
 
 
-# ============================================================
+# =========================================================
 # VALIDAR PENDÊNCIA
-# ============================================================
+# =========================================================
 
 @app.post(
     "/pendencia/{pendencia_id}/validar"
 )
 async def validar_pendencia(
+
     request: Request,
+
     pendencia_id: str
 ):
 
     usuario = usuario_logado(request)
 
-    if not usuario or usuario["perfil"] != "admin":
+    if (
+        not usuario
+        or usuario["perfil"] != "admin"
+    ):
 
         return RedirectResponse(
             "/dashboard",
@@ -688,6 +825,7 @@ async def validar_pendencia(
     if pendencia:
 
         try:
+
             db_id = int(
                 pendencia["db_id"]
             )
@@ -700,8 +838,13 @@ async def validar_pendencia(
                 .eq("id", db_id) \
                 .execute()
 
-        except:
-            pass
+        except Exception as erro:
+
+            print(
+                "Erro ao validar pendência:"
+            )
+
+            print(erro)
 
     return RedirectResponse(
         "/dashboard",
@@ -709,21 +852,26 @@ async def validar_pendencia(
     )
 
 
-# ============================================================
+# =========================================================
 # REABRIR PENDÊNCIA
-# ============================================================
+# =========================================================
 
 @app.post(
     "/pendencia/{pendencia_id}/reabrir"
 )
 async def reabrir_pendencia(
+
     request: Request,
+
     pendencia_id: str
 ):
 
     usuario = usuario_logado(request)
 
-    if not usuario or usuario["perfil"] != "admin":
+    if (
+        not usuario
+        or usuario["perfil"] != "admin"
+    ):
 
         return RedirectResponse(
             "/dashboard",
@@ -737,6 +885,7 @@ async def reabrir_pendencia(
     if pendencia:
 
         try:
+
             db_id = int(
                 pendencia["db_id"]
             )
@@ -744,17 +893,28 @@ async def reabrir_pendencia(
             supabase \
                 .table("pendencias") \
                 .update({
+
                     "status": "PENDENTE",
+
                     "data_resolucao": None,
+
                     "observacao_resolucao": None,
+
                     "foto_depois": None,
+
                     "resolvido_por": None
+
                 }) \
                 .eq("id", db_id) \
                 .execute()
 
-        except:
-            pass
+        except Exception as erro:
+
+            print(
+                "Erro ao reabrir pendência:"
+            )
+
+            print(erro)
 
     return RedirectResponse(
         "/dashboard",
