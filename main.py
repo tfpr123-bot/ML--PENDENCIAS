@@ -7,6 +7,14 @@ from pathlib import Path
 from datetime import datetime
 import shutil
 import uuid
+import os
+
+from supabase import create_client, Client
+
+
+# ============================================================
+# CONFIGURAÇÃO
+# ============================================================
 
 app = FastAPI(title="Melhoria Contínua")
 
@@ -15,10 +23,38 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+
+# ============================================================
+# SUPABASE
+# ============================================================
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError(
+        "SUPABASE_URL e SUPABASE_KEY precisam estar configurados."
+    )
+
+supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
+)
+
+
+# ============================================================
+# SESSÃO
+# ============================================================
+
 app.add_middleware(
     SessionMiddleware,
-    secret_key="melhoria-continua-chave-secreta"
+    secret_key="melhoria-contínua-chave-secreta"
 )
+
+
+# ============================================================
+# UPLOADS
+# ============================================================
 
 app.mount(
     "/uploads",
@@ -26,14 +62,19 @@ app.mount(
     name="uploads"
 )
 
+
+# ============================================================
+# TEMPLATES
+# ============================================================
+
 templates = Jinja2Templates(
     directory=str(BASE_DIR / "templates")
 )
 
 
-# =========================
+# ============================================================
 # SETORES
-# =========================
+# ============================================================
 
 SETORES = [
     "A01",
@@ -48,12 +89,11 @@ SETORES = [
 ]
 
 
-# =========================
+# ============================================================
 # USUÁRIOS
-# =========================
+# ============================================================
 
 USUARIOS = {
-
     "marlon": {
         "senha": "1234",
         "nome": "Marlon",
@@ -126,21 +166,11 @@ USUARIOS = {
 }
 
 
-# =========================
-# BANCO TEMPORÁRIO
-# =========================
-
-pendencias = []
-
-contador = 1
-
-
-# =========================
-# FUNÇÕES
-# =========================
+# ============================================================
+# FUNÇÕES AUXILIARES
+# ============================================================
 
 def usuario_logado(request: Request):
-
     username = request.session.get("usuario")
 
     if not username:
@@ -149,18 +179,11 @@ def usuario_logado(request: Request):
     return USUARIOS.get(username)
 
 
-def gerar_id():
-
-    global contador
-
-    numero = f"MC-{contador:05d}"
-
-    contador += 1
-
-    return numero
-
-
 def salvar_foto(arquivo: UploadFile):
+    """
+    Por enquanto mantém o sistema de fotos exatamente como estava.
+    A próxima etapa será mandar essas fotos para o Storage do Supabase.
+    """
 
     if not arquivo or not arquivo.filename:
         return None
@@ -180,9 +203,125 @@ def salvar_foto(arquivo: UploadFile):
     return nome_arquivo
 
 
-# =========================
-# INÍCIO
-# =========================
+def formatar_pendencia(p):
+    """
+    Converte o registro do Supabase para o formato que
+    os templates atuais já utilizam.
+
+    Não precisamos alterar o modelo visual.
+    """
+
+    if not p:
+        return None
+
+    db_id = p.get("id")
+
+    try:
+        codigo = f"MC-{int(db_id):05d}"
+    except:
+        codigo = str(db_id)
+
+    data_criacao = p.get("data_criacao")
+
+    if data_criacao:
+        try:
+            dt = datetime.fromisoformat(
+                data_criacao.replace("Z", "+00:00")
+            )
+
+            data_criacao_formatada = dt.strftime(
+                "%d/%m/%Y %H:%M"
+            )
+
+        except:
+            data_criacao_formatada = str(data_criacao)
+
+    else:
+        data_criacao_formatada = None
+
+    return {
+        "id": codigo,
+
+        # ID real do banco
+        "db_id": db_id,
+
+        "setor": p.get("setor"),
+        "local": p.get("local"),
+        "descricao": p.get("descricao"),
+        "categoria": p.get("categoria"),
+        "prioridade": p.get("prioridade"),
+        "prazo": p.get("prazo"),
+
+        "foto_antes": p.get("foto_antes"),
+
+        "status": p.get("status"),
+
+        "data_criacao": data_criacao_formatada,
+
+        "data_resolucao": p.get("data_resolucao"),
+
+        "observacao_resolucao": p.get(
+            "observacao_resolucao"
+        ),
+
+        "foto_depois": p.get("foto_depois"),
+
+        "criado_por": p.get("criado_por"),
+
+        "resolvido_por": p.get("resolvido_por")
+    }
+
+
+def buscar_todas_pendencias():
+    resposta = (
+        supabase
+        .table("pendencias")
+        .select("*")
+        .order("id", desc=True)
+        .execute()
+    )
+
+    dados = resposta.data or []
+
+    return [
+        formatar_pendencia(p)
+        for p in dados
+    ]
+
+
+def buscar_pendencia(codigo):
+    """
+    Recebe algo como MC-00001 e procura o ID 1 no banco.
+    """
+
+    try:
+        if codigo.startswith("MC-"):
+            db_id = int(codigo.replace("MC-", ""))
+        else:
+            db_id = int(codigo)
+    except:
+        return None
+
+    resposta = (
+        supabase
+        .table("pendencias")
+        .select("*")
+        .eq("id", db_id)
+        .limit(1)
+        .execute()
+    )
+
+    if not resposta.data:
+        return None
+
+    return formatar_pendencia(
+        resposta.data[0]
+    )
+
+
+# ============================================================
+# LOGIN
+# ============================================================
 
 @app.get("/", response_class=HTMLResponse)
 async def inicio(request: Request):
@@ -201,10 +340,6 @@ async def inicio(request: Request):
         context={}
     )
 
-
-# =========================
-# LOGIN
-# =========================
 
 @app.post("/login")
 async def login(
@@ -234,9 +369,9 @@ async def login(
     )
 
 
-# =========================
+# ============================================================
 # LOGOUT
-# =========================
+# ============================================================
 
 @app.get("/logout")
 async def logout(request: Request):
@@ -249,34 +384,30 @@ async def logout(request: Request):
     )
 
 
-# =========================
+# ============================================================
 # DASHBOARD
-# =========================
+# ============================================================
 
-@app.get(
-    "/dashboard",
-    response_class=HTMLResponse
-)
+@app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
 
     usuario = usuario_logado(request)
 
     if not usuario:
-
         return RedirectResponse(
             "/",
             status_code=303
         )
 
-    if usuario["perfil"] == "admin":
+    # Busca no Supabase
+    lista = buscar_todas_pendencias()
 
-        lista = pendencias
-
-    else:
+    # Líder só enxerga seu setor
+    if usuario["perfil"] == "lider":
 
         lista = [
             p
-            for p in pendencias
+            for p in lista
             if p["setor"] == usuario["setor"]
         ]
 
@@ -312,9 +443,9 @@ async def dashboard(request: Request):
     )
 
 
-# =========================
-# NOVA PENDÊNCIA - TELA
-# =========================
+# ============================================================
+# NOVA PENDÊNCIA - FORMULÁRIO
+# ============================================================
 
 @app.get(
     "/pendencia/nova",
@@ -342,29 +473,22 @@ async def nova_pendencia_form(
     )
 
 
-# =========================
-# NOVA PENDÊNCIA - SALVAR
-# =========================
+# ============================================================
+# CRIAR PENDÊNCIA
+# ============================================================
 
 @app.post("/pendencia/nova")
 async def criar_pendencia(
-
     request: Request,
 
     setor: str = Form(...),
-
     local: str = Form(...),
-
     descricao: str = Form(...),
-
     categoria: str = Form(...),
-
     prioridade: str = Form(...),
-
     prazo: str = Form(...),
 
     foto: UploadFile = File(None)
-
 ):
 
     usuario = usuario_logado(request)
@@ -376,42 +500,26 @@ async def criar_pendencia(
             status_code=303
         )
 
+    # Salva foto localmente por enquanto
     foto_nome = salvar_foto(foto)
 
     nova = {
-
-        "id": gerar_id(),
-
         "setor": setor,
-
         "local": local,
-
         "descricao": descricao,
-
         "categoria": categoria,
-
         "prioridade": prioridade,
-
         "prazo": prazo,
-
         "foto_antes": foto_nome,
-
         "status": "PENDENTE",
-
-        "data_criacao":
-            datetime.now().strftime(
-                "%d/%m/%Y %H:%M"
-            ),
-
-        "data_resolucao": None,
-
-        "observacao_resolucao": None,
-
-        "foto_depois": None
-
+        "criado_por": usuario["nome"]
     }
 
-    pendencias.append(nova)
+    # GRAVA NO SUPABASE
+    supabase \
+        .table("pendencias") \
+        .insert(nova) \
+        .execute()
 
     return RedirectResponse(
         "/dashboard",
@@ -419,20 +527,17 @@ async def criar_pendencia(
     )
 
 
-# =========================
+# ============================================================
 # VISUALIZAR PENDÊNCIA
-# =========================
+# ============================================================
 
 @app.get(
     "/pendencia/{pendencia_id}",
     response_class=HTMLResponse
 )
 async def visualizar_pendencia(
-
     request: Request,
-
     pendencia_id: str
-
 ):
 
     usuario = usuario_logado(request)
@@ -444,13 +549,8 @@ async def visualizar_pendencia(
             status_code=303
         )
 
-    pendencia = next(
-        (
-            p
-            for p in pendencias
-            if p["id"] == pendencia_id
-        ),
-        None
+    pendencia = buscar_pendencia(
+        pendencia_id
     )
 
     if not pendencia:
@@ -460,6 +560,8 @@ async def visualizar_pendencia(
             status_code=404
         )
 
+    # Segurança:
+    # líder só pode acessar seu setor
     if usuario["perfil"] == "lider":
 
         if pendencia["setor"] != usuario["setor"]:
@@ -479,25 +581,22 @@ async def visualizar_pendencia(
     )
 
 
-# =========================
+# ============================================================
 # RESOLVER PENDÊNCIA
-# =========================
+# ============================================================
 
 @app.post(
     "/pendencia/{pendencia_id}/resolver"
 )
 async def resolver_pendencia(
-
     request: Request,
 
     pendencia_id: str,
 
     data_resolucao: str = Form(...),
-
     observacao: str = Form(...),
 
     foto: UploadFile = File(None)
-
 ):
 
     usuario = usuario_logado(request)
@@ -509,13 +608,8 @@ async def resolver_pendencia(
             status_code=303
         )
 
-    pendencia = next(
-        (
-            p
-            for p in pendencias
-            if p["id"] == pendencia_id
-        ),
-        None
+    pendencia = buscar_pendencia(
+        pendencia_id
     )
 
     if not pendencia:
@@ -525,6 +619,7 @@ async def resolver_pendencia(
             status_code=404
         )
 
+    # Confere setor
     if pendencia["setor"] != usuario["setor"]:
 
         return HTMLResponse(
@@ -534,13 +629,30 @@ async def resolver_pendencia(
 
     foto_nome = salvar_foto(foto)
 
-    pendencia["data_resolucao"] = data_resolucao
+    try:
+        db_id = int(
+            pendencia["db_id"]
+        )
+    except:
+        return HTMLResponse(
+            "ID da pendência inválido.",
+            status_code=400
+        )
 
-    pendencia["observacao_resolucao"] = observacao
+    atualizacao = {
+        "data_resolucao": data_resolucao,
+        "observacao_resolucao": observacao,
+        "foto_depois": foto_nome,
+        "status": "AGUARDANDO VALIDAÇÃO",
+        "resolvido_por": usuario["nome"]
+    }
 
-    pendencia["foto_depois"] = foto_nome
-
-    pendencia["status"] = "AGUARDANDO VALIDAÇÃO"
+    # ATUALIZA NO SUPABASE
+    supabase \
+        .table("pendencias") \
+        .update(atualizacao) \
+        .eq("id", db_id) \
+        .execute()
 
     return RedirectResponse(
         "/dashboard",
@@ -548,19 +660,16 @@ async def resolver_pendencia(
     )
 
 
-# =========================
-# VALIDAR
-# =========================
+# ============================================================
+# VALIDAR PENDÊNCIA
+# ============================================================
 
 @app.post(
     "/pendencia/{pendencia_id}/validar"
 )
 async def validar_pendencia(
-
     request: Request,
-
     pendencia_id: str
-
 ):
 
     usuario = usuario_logado(request)
@@ -572,18 +681,27 @@ async def validar_pendencia(
             status_code=303
         )
 
-    pendencia = next(
-        (
-            p
-            for p in pendencias
-            if p["id"] == pendencia_id
-        ),
-        None
+    pendencia = buscar_pendencia(
+        pendencia_id
     )
 
     if pendencia:
 
-        pendencia["status"] = "VALIDADO"
+        try:
+            db_id = int(
+                pendencia["db_id"]
+            )
+
+            supabase \
+                .table("pendencias") \
+                .update({
+                    "status": "VALIDADO"
+                }) \
+                .eq("id", db_id) \
+                .execute()
+
+        except:
+            pass
 
     return RedirectResponse(
         "/dashboard",
@@ -591,19 +709,16 @@ async def validar_pendencia(
     )
 
 
-# =========================
-# REABRIR
-# =========================
+# ============================================================
+# REABRIR PENDÊNCIA
+# ============================================================
 
 @app.post(
     "/pendencia/{pendencia_id}/reabrir"
 )
 async def reabrir_pendencia(
-
     request: Request,
-
     pendencia_id: str
-
 ):
 
     usuario = usuario_logado(request)
@@ -615,24 +730,31 @@ async def reabrir_pendencia(
             status_code=303
         )
 
-    pendencia = next(
-        (
-            p
-            for p in pendencias
-            if p["id"] == pendencia_id
-        ),
-        None
+    pendencia = buscar_pendencia(
+        pendencia_id
     )
 
     if pendencia:
 
-        pendencia["status"] = "PENDENTE"
+        try:
+            db_id = int(
+                pendencia["db_id"]
+            )
 
-        pendencia["data_resolucao"] = None
+            supabase \
+                .table("pendencias") \
+                .update({
+                    "status": "PENDENTE",
+                    "data_resolucao": None,
+                    "observacao_resolucao": None,
+                    "foto_depois": None,
+                    "resolvido_por": None
+                }) \
+                .eq("id", db_id) \
+                .execute()
 
-        pendencia["observacao_resolucao"] = None
-
-        pendencia["foto_depois"] = None
+        except:
+            pass
 
     return RedirectResponse(
         "/dashboard",
