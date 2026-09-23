@@ -10,13 +10,9 @@ import uuid
 
 app = FastAPI(title="Melhoria Contínua")
 
-# =========================
-# CONFIGURAÇÕES
-# =========================
-
 BASE_DIR = Path(__file__).resolve().parent
-UPLOAD_DIR = BASE_DIR / "uploads"
 
+UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 app.add_middleware(
@@ -30,11 +26,13 @@ app.mount(
     name="uploads"
 )
 
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+templates = Jinja2Templates(
+    directory=str(BASE_DIR / "templates")
+)
 
 
 # =========================
-# DADOS INICIAIS
+# SETORES
 # =========================
 
 SETORES = [
@@ -49,7 +47,13 @@ SETORES = [
     "BC"
 ]
 
+
+# =========================
+# USUÁRIOS
+# =========================
+
 USUARIOS = {
+
     "marlon": {
         "senha": "1234",
         "nome": "Marlon",
@@ -132,10 +136,11 @@ contador = 1
 
 
 # =========================
-# FUNÇÕES AUXILIARES
+# FUNÇÕES
 # =========================
 
 def usuario_logado(request: Request):
+
     username = request.session.get("usuario")
 
     if not username:
@@ -145,15 +150,18 @@ def usuario_logado(request: Request):
 
 
 def gerar_id():
+
     global contador
 
     numero = f"MC-{contador:05d}"
+
     contador += 1
 
     return numero
 
 
 def salvar_foto(arquivo: UploadFile):
+
     if not arquivo or not arquivo.filename:
         return None
 
@@ -164,13 +172,16 @@ def salvar_foto(arquivo: UploadFile):
     caminho = UPLOAD_DIR / nome_arquivo
 
     with caminho.open("wb") as buffer:
-        shutil.copyfileobj(arquivo.file, buffer)
+        shutil.copyfileobj(
+            arquivo.file,
+            buffer
+        )
 
     return nome_arquivo
 
 
 # =========================
-# LOGIN
+# INÍCIO
 # =========================
 
 @app.get("/", response_class=HTMLResponse)
@@ -185,12 +196,15 @@ async def inicio(request: Request):
         )
 
     return templates.TemplateResponse(
-        "login.html",
-        {
-            "request": request
-        }
+        request=request,
+        name="login.html",
+        context={}
     )
 
+
+# =========================
+# LOGIN
+# =========================
 
 @app.post("/login")
 async def login(
@@ -204,9 +218,9 @@ async def login(
     if not dados or dados["senha"] != senha:
 
         return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
+            request=request,
+            name="login.html",
+            context={
                 "erro": "Usuário ou senha inválidos."
             },
             status_code=401
@@ -219,6 +233,10 @@ async def login(
         status_code=303
     )
 
+
+# =========================
+# LOGOUT
+# =========================
 
 @app.get("/logout")
 async def logout(request: Request):
@@ -235,12 +253,16 @@ async def logout(request: Request):
 # DASHBOARD
 # =========================
 
-@app.get("/dashboard", response_class=HTMLResponse)
+@app.get(
+    "/dashboard",
+    response_class=HTMLResponse
+)
 async def dashboard(request: Request):
 
     usuario = usuario_logado(request)
 
     if not usuario:
+
         return RedirectResponse(
             "/",
             status_code=303
@@ -253,29 +275,33 @@ async def dashboard(request: Request):
     else:
 
         lista = [
-            p for p in pendencias
+            p
+            for p in pendencias
             if p["setor"] == usuario["setor"]
         ]
 
     pendentes = len([
-        p for p in lista
+        p
+        for p in lista
         if p["status"] == "PENDENTE"
     ])
 
     aguardando = len([
-        p for p in lista
+        p
+        for p in lista
         if p["status"] == "AGUARDANDO VALIDAÇÃO"
     ])
 
     validadas = len([
-        p for p in lista
+        p
+        for p in lista
         if p["status"] == "VALIDADO"
     ])
 
     return templates.TemplateResponse(
-        "dashboard.html",
-        {
-            "request": request,
+        request=request,
+        name="dashboard.html",
+        context={
             "usuario": usuario,
             "pendencias": lista,
             "setores": SETORES,
@@ -287,44 +313,64 @@ async def dashboard(request: Request):
 
 
 # =========================
-# NOVA PENDÊNCIA
+# NOVA PENDÊNCIA - TELA
 # =========================
 
-@app.get("/pendencia/nova", response_class=HTMLResponse)
-async def nova_pendencia_form(request: Request):
+@app.get(
+    "/pendencia/nova",
+    response_class=HTMLResponse
+)
+async def nova_pendencia_form(
+    request: Request
+):
 
     usuario = usuario_logado(request)
 
     if not usuario or usuario["perfil"] != "admin":
+
         return RedirectResponse(
             "/dashboard",
             status_code=303
         )
 
     return templates.TemplateResponse(
-        "nova_pendencia.html",
-        {
-            "request": request,
+        request=request,
+        name="nova_pendencia.html",
+        context={
             "setores": SETORES
         }
     )
 
 
+# =========================
+# NOVA PENDÊNCIA - SALVAR
+# =========================
+
 @app.post("/pendencia/nova")
 async def criar_pendencia(
+
     request: Request,
+
     setor: str = Form(...),
+
     local: str = Form(...),
+
     descricao: str = Form(...),
+
     categoria: str = Form(...),
+
     prioridade: str = Form(...),
+
     prazo: str = Form(...),
+
     foto: UploadFile = File(None)
+
 ):
 
     usuario = usuario_logado(request)
 
     if not usuario or usuario["perfil"] != "admin":
+
         return RedirectResponse(
             "/dashboard",
             status_code=303
@@ -333,19 +379,36 @@ async def criar_pendencia(
     foto_nome = salvar_foto(foto)
 
     nova = {
+
         "id": gerar_id(),
+
         "setor": setor,
+
         "local": local,
+
         "descricao": descricao,
+
         "categoria": categoria,
+
         "prioridade": prioridade,
+
         "prazo": prazo,
+
         "foto_antes": foto_nome,
+
         "status": "PENDENTE",
-        "data_criacao": datetime.now().strftime("%d/%m/%Y %H:%M"),
+
+        "data_criacao":
+            datetime.now().strftime(
+                "%d/%m/%Y %H:%M"
+            ),
+
         "data_resolucao": None,
+
         "observacao_resolucao": None,
+
         "foto_depois": None
+
     }
 
     pendencias.append(nova)
@@ -360,15 +423,22 @@ async def criar_pendencia(
 # VISUALIZAR PENDÊNCIA
 # =========================
 
-@app.get("/pendencia/{pendencia_id}", response_class=HTMLResponse)
+@app.get(
+    "/pendencia/{pendencia_id}",
+    response_class=HTMLResponse
+)
 async def visualizar_pendencia(
+
     request: Request,
+
     pendencia_id: str
+
 ):
 
     usuario = usuario_logado(request)
 
     if not usuario:
+
         return RedirectResponse(
             "/",
             status_code=303
@@ -376,29 +446,33 @@ async def visualizar_pendencia(
 
     pendencia = next(
         (
-            p for p in pendencias
+            p
+            for p in pendencias
             if p["id"] == pendencia_id
         ),
         None
     )
 
     if not pendencia:
+
         return HTMLResponse(
             "Pendência não encontrada.",
             status_code=404
         )
 
     if usuario["perfil"] == "lider":
+
         if pendencia["setor"] != usuario["setor"]:
+
             return HTMLResponse(
                 "Acesso não permitido.",
                 status_code=403
             )
 
     return templates.TemplateResponse(
-        "pendencia.html",
-        {
-            "request": request,
+        request=request,
+        name="pendencia.html",
+        context={
             "usuario": usuario,
             "pendencia": pendencia
         }
@@ -409,18 +483,27 @@ async def visualizar_pendencia(
 # RESOLVER PENDÊNCIA
 # =========================
 
-@app.post("/pendencia/{pendencia_id}/resolver")
+@app.post(
+    "/pendencia/{pendencia_id}/resolver"
+)
 async def resolver_pendencia(
+
     request: Request,
+
     pendencia_id: str,
+
     data_resolucao: str = Form(...),
+
     observacao: str = Form(...),
+
     foto: UploadFile = File(None)
+
 ):
 
     usuario = usuario_logado(request)
 
     if not usuario or usuario["perfil"] != "lider":
+
         return RedirectResponse(
             "/dashboard",
             status_code=303
@@ -428,19 +511,22 @@ async def resolver_pendencia(
 
     pendencia = next(
         (
-            p for p in pendencias
+            p
+            for p in pendencias
             if p["id"] == pendencia_id
         ),
         None
     )
 
     if not pendencia:
+
         return HTMLResponse(
             "Pendência não encontrada.",
             status_code=404
         )
 
     if pendencia["setor"] != usuario["setor"]:
+
         return HTMLResponse(
             "Acesso não permitido.",
             status_code=403
@@ -449,8 +535,11 @@ async def resolver_pendencia(
     foto_nome = salvar_foto(foto)
 
     pendencia["data_resolucao"] = data_resolucao
+
     pendencia["observacao_resolucao"] = observacao
+
     pendencia["foto_depois"] = foto_nome
+
     pendencia["status"] = "AGUARDANDO VALIDAÇÃO"
 
     return RedirectResponse(
@@ -463,15 +552,21 @@ async def resolver_pendencia(
 # VALIDAR
 # =========================
 
-@app.post("/pendencia/{pendencia_id}/validar")
+@app.post(
+    "/pendencia/{pendencia_id}/validar"
+)
 async def validar_pendencia(
+
     request: Request,
+
     pendencia_id: str
+
 ):
 
     usuario = usuario_logado(request)
 
     if not usuario or usuario["perfil"] != "admin":
+
         return RedirectResponse(
             "/dashboard",
             status_code=303
@@ -479,13 +574,15 @@ async def validar_pendencia(
 
     pendencia = next(
         (
-            p for p in pendencias
+            p
+            for p in pendencias
             if p["id"] == pendencia_id
         ),
         None
     )
 
     if pendencia:
+
         pendencia["status"] = "VALIDADO"
 
     return RedirectResponse(
@@ -498,15 +595,21 @@ async def validar_pendencia(
 # REABRIR
 # =========================
 
-@app.post("/pendencia/{pendencia_id}/reabrir")
+@app.post(
+    "/pendencia/{pendencia_id}/reabrir"
+)
 async def reabrir_pendencia(
+
     request: Request,
+
     pendencia_id: str
+
 ):
 
     usuario = usuario_logado(request)
 
     if not usuario or usuario["perfil"] != "admin":
+
         return RedirectResponse(
             "/dashboard",
             status_code=303
@@ -514,16 +617,21 @@ async def reabrir_pendencia(
 
     pendencia = next(
         (
-            p for p in pendencias
+            p
+            for p in pendencias
             if p["id"] == pendencia_id
         ),
         None
     )
 
     if pendencia:
+
         pendencia["status"] = "PENDENTE"
+
         pendencia["data_resolucao"] = None
+
         pendencia["observacao_resolucao"] = None
+
         pendencia["foto_depois"] = None
 
     return RedirectResponse(
