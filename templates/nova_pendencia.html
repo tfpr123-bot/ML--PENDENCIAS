@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Nova Pendência - Melhoria Contínua</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f3f5f7;
+            color: #202124;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .topbar {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 16px 5%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .voltar {
+            color: #2563eb;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .container {
+            width: min(750px, 92%);
+            margin: 35px auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+        }
+
+        h1 {
+            margin-top: 0;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            margin-bottom: 30px;
+        }
+
+        .campo {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 13px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+
+        .linha {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .foto-area {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            background: #fafafa;
+        }
+
+        .foto-area p {
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 0;
+        }
+
+        .foto-area input {
+            border: none;
+            padding: 5px;
+            background: transparent;
+        }
+
+        .botoes {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .btn-cancelar {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .btn-salvar {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-salvar:hover {
+            background: #1d4ed8;
+        }
+
+        @media (max-width: 600px) {
+
+            .container {
+                width: 94%;
+                margin: 20px auto;
+            }
+
+            .card {
+                padding: 22px;
+            }
+
+            .linha {
+                grid-template-columns: 1fr;
+                gap: 0;
+            }
+
+            .botoes {
+                flex-direction: column;
+            }
+
+        }
+    </style>
+
+</head>
+
+<body>
+
+<header class="topbar">
+
+    <div class="brand">
+        Melhoria Contínua
+    </div>
+
+    <a href="/dashboard" class="voltar">
+        ← Voltar
+    </a>
+
+</header>
+
+
+<main class="container">
+
+    <div class="card">
+
+        <h1>
+            Nova pendência
+        </h1>
+
+        <p class="subtitle">
+            Registre uma situação identificada durante a auditoria.
+        </p>
+
+
+        <form
+            method="POST"
+            action="/pendencia/nova"
+            enctype="multipart/form-data"
+        >
+
+
+            <div class="linha">
+
+                <div class="campo">
+
+                    <label for="setor">
+                        Setor / Granja
+                    </label>
+
+                    <select
+                        id="setor"
+                        name="setor"
+                        required
+                    >
+
+                        <option value="">
+                            Selecione
+                        </option>
+
+                        {% for setor in setores %}
+
+                            <option value="{{ setor }}">
+                                {{ setor }}
+                            </option>
+
+                        {% endfor %}
+
+                    </select>
+
+                </div>
+
+
+                <div class="campo">
+
+                    <label for="local">
+                        Local
+                    </label>
+
+                    <input
+                        type="text"
+                        id="local"
+                        name="local"
+                        placeholder="Ex.: Núcleo 05"
+                        required
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="campo">
+
+                <label for="descricao">
+                    Descrição da pendência
+                </label>
+
+                <textarea
+                    id="descricao"
+                    name="descricao"
+                    placeholder="Descreva o que foi identificado..."
+                    required
+                ></textarea>
+
+            </div>
+
+
+            <div class="linha">
+
+                <div class="campo">
+
+                    <label for="categoria">
+                        Categoria
+                    </label>
+
+                    <select
+                        id="categoria"
+                        name="categoria"
+                        required
+                    >
+
+                        <option value="">
+                            Selecione
+                        </option>
+
+                        <option value="5S">
+                            5S
+                        </option>
+
+                        <option value="Limpeza">
+                            Limpeza
+                        </option>
+
+                        <option value="Manutenção">
+                            Manutenção
+                        </option>
+
+                        <option value="Segurança">
+                            Segurança
+                        </option>
+
+                        <option value="Organização">
+                            Organização
+                        </option>
+
+                        <option value="Estrutura">
+                            Estrutura
+                        </option>
+
+                        <option value="Outro">
+                            Outro
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div class="campo">
+
+                    <label for="prioridade">
+                        Prioridade
+                    </label>
+
+                    <select
+                        id="prioridade"
+                        name="prioridade"
+                        required
+                    >
+
+                        <option value="Baixa">
+                            🟢 Baixa
+                        </option>
+
+                        <option value="Média" selected>
+                            🟡 Média
+                        </option>
+
+                        <option value="Alta">
+                            🟠 Alta
+                        </option>
+
+                        <option value="Crítica">
+                            🔴 Crítica
+                        </option>
+
+                    </select>
+
+                </div>
+
+            </div>
+
+
+            <div class="campo">
+
+                <label for="prazo">
+                    Prazo para resolução
+                </label>
+
+                <input
+                    type="date"
+                    id="prazo"
+                    name="prazo"
+                    required
+                >
+
+            </div>
+
+
+            <div class="campo">
+
+                <label>
+                    Foto da situação encontrada
+                </label>
+
+                <div class="foto-area">
+
+                    <p>
+                        Tire uma foto ou selecione uma imagem da ocorrência.
+                    </p>
+
+                    <input
+                        type="file"
+                        name="foto"
+                        accept="image/*"
+                        capture="environment"
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="botoes">
+
+                <a
+                    href="/dashboard"
+                    class="btn btn-cancelar"
+                >
+                    Cancelar
+                </a>
+
+                <button
+                    type="submit"
+                    class="btn btn-salvar"
+                >
+                    Cadastrar pendência
+                </button>
+
+            </div>
+
+
+        </form>
+
+    </div>
+
+</main>
+
+</body>
+
+</html>
