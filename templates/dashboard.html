@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Dashboard - Melhoria Contínua</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f3f5f7;
+            color: #202124;
+        }
+
+        a {
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .topbar {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 16px 5%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .brand {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .user-area {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 14px;
+        }
+
+        .logout {
+            background: #f3f4f6;
+            padding: 9px 14px;
+            border-radius: 8px;
+            color: #374151;
+        }
+
+        .container {
+            width: min(1200px, 92%);
+            margin: 30px auto;
+        }
+
+        .welcome {
+            margin-bottom: 25px;
+        }
+
+        .welcome h1 {
+            margin: 0 0 6px;
+            font-size: 28px;
+        }
+
+        .welcome p {
+            margin: 0;
+            color: #6b7280;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 14px;
+            padding: 22px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .card-title {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .card-number {
+            font-size: 30px;
+            font-weight: bold;
+        }
+
+        .red {
+            border-left: 5px solid #dc2626;
+        }
+
+        .yellow {
+            border-left: 5px solid #f59e0b;
+        }
+
+        .green {
+            border-left: 5px solid #16a34a;
+        }
+
+        .gray {
+            border-left: 5px solid #6b7280;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .section-header h2 {
+            margin: 0;
+            font-size: 21px;
+        }
+
+        .btn {
+            display: inline-block;
+            background: #2563eb;
+            color: white;
+            padding: 11px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .btn:hover {
+            background: #1d4ed8;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 14px;
+            overflow-x: auto;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #eeeeee;
+            font-size: 14px;
+        }
+
+        th {
+            background: #f9fafb;
+            color: #6b7280;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status-pendente {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-validacao {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-validado {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-vazio {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        .ver {
+            color: #2563eb;
+            font-weight: bold;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 50px 20px;
+            color: #6b7280;
+        }
+
+        @media (max-width: 850px) {
+
+            .cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+        }
+
+        @media (max-width: 550px) {
+
+            .topbar {
+                padding: 14px 4%;
+            }
+
+            .brand {
+                font-size: 17px;
+            }
+
+            .user-area {
+                font-size: 12px;
+            }
+
+            .container {
+                width: 94%;
+                margin: 20px auto;
+            }
+
+            .welcome h1 {
+                font-size: 24px;
+            }
+
+            .cards {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+
+            .card {
+                padding: 16px;
+            }
+
+            .card-number {
+                font-size: 25px;
+            }
+
+            .section-header {
+                align-items: flex-start;
+                gap: 10px;
+                flex-direction: column;
+            }
+
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <header class="topbar">
+
+        <div class="brand">
+            Melhoria Contínua
+        </div>
+
+        <div class="user-area">
+
+            <span>
+                {{ usuario["nome"] }}
+            </span>
+
+            <a href="/logout" class="logout">
+                Sair
+            </a>
+
+        </div>
+
+    </header>
+
+
+    <main class="container">
+
+        <div class="welcome">
+
+            <h1>
+                Olá, {{ usuario["nome"] }} 👋
+            </h1>
+
+            {% if usuario["perfil"] == "admin" %}
+
+                <p>
+                    Acompanhe as pendências e melhorias das unidades.
+                </p>
+
+            {% else %}
+
+                <p>
+                    Confira as pendências do seu setor.
+                </p>
+
+            {% endif %}
+
+        </div>
+
+
+        <!-- CARDS -->
+
+        <div class="cards">
+
+            <div class="card red">
+
+                <div class="card-title">
+                    Pendentes
+                </div>
+
+                <div class="card-number">
+                    {{ pendentes }}
+                </div>
+
+            </div>
+
+
+            <div class="card yellow">
+
+                <div class="card-title">
+                    Aguardando validação
+                </div>
+
+                <div class="card-number">
+                    {{ aguardando }}
+                </div>
+
+            </div>
+
+
+            <div class="card green">
+
+                <div class="card-title">
+                    Validadas
+                </div>
+
+                <div class="card-number">
+                    {{ validadas }}
+                </div>
+
+            </div>
+
+
+            <div class="card gray">
+
+                <div class="card-title">
+                    Total
+                </div>
+
+                <div class="card-number">
+                    {{ pendencias|length }}
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- PENDÊNCIAS -->
+
+        <div class="section-header">
+
+            <h2>
+                Pendências
+            </h2>
+
+            {% if usuario["perfil"] == "admin" %}
+
+                <a href="/pendencia/nova" class="btn">
+                    + Nova pendência
+                </a>
+
+            {% endif %}
+
+        </div>
+
+
+        <div class="table-container">
+
+            {% if pendencias %}
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>ID</th>
+
+                            <th>Setor</th>
+
+                            <th>Descrição</th>
+
+                            <th>Prioridade</th>
+
+                            <th>Prazo</th>
+
+                            <th>Status</th>
+
+                            <th></th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody>
+
+                        {% for p in pendencias %}
+
+                            <tr>
+
+                                <td>
+                                    <strong>{{ p["id"] }}</strong>
+                                </td>
+
+                                <td>
+                                    {{ p["setor"] }}
+                                </td>
+
+                                <td>
+                                    {{ p["descricao"] }}
+                                </td>
+
+                                <td>
+                                    {{ p["prioridade"] }}
+                                </td>
+
+                                <td>
+                                    {{ p["prazo"] }}
+                                </td>
+
+                                <td>
+
+                                    {% if p["status"] == "PENDENTE" %}
+
+                                        <span class="status status-pendente">
+                                            Pendente
+                                        </span>
+
+                                    {% elif p["status"] == "AGUARDANDO VALIDAÇÃO" %}
+
+                                        <span class="status status-validacao">
+                                            Aguardando validação
+                                        </span>
+
+                                    {% elif p["status"] == "VALIDADO" %}
+
+                                        <span class="status status-validado">
+                                            Validado
+                                        </span>
+
+                                    {% else %}
+
+                                        <span class="status status-vazio">
+                                            {{ p["status"] }}
+                                        </span>
+
+                                    {% endif %}
+
+                                </td>
+
+                                <td>
+
+                                    <a
+                                        href="/pendencia/{{ p['id'] }}"
+                                        class="ver"
+                                    >
+                                        Ver →
+                                    </a>
+
+                                </td>
+
+                            </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            {% else %}
+
+                <div class="empty">
+
+                    <h3>
+                        Nenhuma pendência encontrada
+                    </h3>
+
+                    {% if usuario["perfil"] == "admin" %}
+
+                        <p>
+                            Clique em "Nova pendência" para cadastrar a primeira.
+                        </p>
+
+                    {% else %}
+
+                        <p>
+                            Seu setor não possui pendências no momento.
+                        </p>
+
+                    {% endif %}
+
+                </div>
+
+            {% endif %}
+
+        </div>
+
+    </main>
+
+</body>
+
+</html>
